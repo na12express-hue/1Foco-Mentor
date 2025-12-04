@@ -26,27 +26,13 @@ Ao responder, use formatação Markdown clara (listas, negrito) para facilitar a
 let chatSession: Chat | null = null;
 let genAI: GoogleGenAI | null = null;
 
-// Helper to safely get the API key from Env or LocalStorage
+// Get API Key strictly from environment variable
 export const getApiKey = (): string => {
-  let key = '';
-  // Try process.env safely (avoids crash in browser)
-  try {
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      key = process.env.API_KEY;
-    }
-  } catch (e) {
-    // process is not defined, ignore
+  // Access process.env safely (injected by Vite)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
   }
-
-  // Fallback to local storage
-  if (!key) {
-    key = localStorage.getItem('gemini_api_key') || '';
-  }
-  return key;
-};
-
-export const setApiKey = (key: string) => {
-  localStorage.setItem('gemini_api_key', key);
+  return '';
 };
 
 export const initializeChat = (historyMessages: Message[] = []): void => {
