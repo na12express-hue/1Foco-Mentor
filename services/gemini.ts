@@ -1,8 +1,6 @@
 import { GoogleGenAI, Chat, Content } from "@google/genai";
 import { Message, Role } from "../types";
 
-const API_KEY = process.env.API_KEY || '';
-
 const SYSTEM_INSTRUCTION = `
 Você é o "Foco Mentor IA", um assistente de aplicação de conhecimento e produtividade, criado para os clientes da "Mega Biblioteca 700+ Livros Digitais". Seu objetivo não é pesquisar arquivos, mas sim atuar como um coach pessoal, prático e direto, garantindo que o usuário entenda e aplique os conceitos que está lendo.
 
@@ -28,14 +26,39 @@ Ao responder, use formatação Markdown clara (listas, negrito) para facilitar a
 let chatSession: Chat | null = null;
 let genAI: GoogleGenAI | null = null;
 
+// Helper to safely get the API key from Env or LocalStorage
+export const getApiKey = (): string => {
+  let key = '';
+  // Try process.env safely (avoids crash in browser)
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      key = process.env.API_KEY;
+    }
+  } catch (e) {
+    // process is not defined, ignore
+  }
+
+  // Fallback to local storage
+  if (!key) {
+    key = localStorage.getItem('gemini_api_key') || '';
+  }
+  return key;
+};
+
+export const setApiKey = (key: string) => {
+  localStorage.setItem('gemini_api_key', key);
+};
+
 export const initializeChat = (historyMessages: Message[] = []): void => {
-  if (!API_KEY) {
-    console.error("API Key is missing");
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    console.warn("API Key is missing. Chat cannot be initialized.");
     return;
   }
   
   try {
-    genAI = new GoogleGenAI({ apiKey: API_KEY });
+    genAI = new GoogleGenAI({ apiKey });
     
     // Convert application Message type to SDK Content type
     const sdkHistory: Content[] = historyMessages
@@ -63,12 +86,12 @@ export const sendMessageStream = async (
   onChunk: (text: string) => void
 ): Promise<string> => {
   if (!chatSession) {
-    // If no session exists (shouldn't happen if initialized), start a fresh one
+    // Try to init
     initializeChat();
   }
 
   if (!chatSession) {
-    throw new Error("Chat session could not be initialized.");
+    throw new Error("Chat session could not be initialized. Please check your API Key.");
   }
 
   let fullResponse = "";

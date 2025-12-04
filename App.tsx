@@ -3,10 +3,11 @@ import { Send, Menu, Sparkles, AlertCircle, BookOpen } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Message, Role, ChatSession } from './types';
-import { sendMessageStream, initializeChat } from './services/gemini';
+import { sendMessageStream, initializeChat, getApiKey, setApiKey } from './services/gemini';
 import ChatBubble from './components/ChatBubble';
 import TypingIndicator from './components/TypingIndicator';
 import Sidebar from './components/Sidebar';
+import ApiKeyModal from './components/ApiKeyModal';
 
 const INITIAL_GREETING = "Saudações! Eu sou o Foco Mentor IA. Para que eu possa te guiar na aplicação, me diga: **Qual é o tópico que você está lendo ou qual o desafio de aplicação que você está enfrentando agora?**";
 
@@ -17,6 +18,7 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [needsApiKey, setNeedsApiKey] = useState(false);
 
   // Deriving current messages from sessions
   const currentMessages = currentSessionId 
@@ -29,6 +31,14 @@ const App: React.FC = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check for API Key on mount
+  useEffect(() => {
+    const key = getApiKey();
+    if (!key) {
+      setNeedsApiKey(true);
+    }
+  }, []);
 
   // Load from Local Storage on mount
   useEffect(() => {
@@ -62,13 +72,13 @@ const App: React.FC = () => {
 
   // Initialize/Re-initialize Gemini when switching sessions
   useEffect(() => {
-    if (currentSessionId) {
+    if (currentSessionId && !needsApiKey) {
       const session = sessions.find(s => s.id === currentSessionId);
       if (session) {
         initializeChat(session.messages);
       }
     }
-  }, [currentSessionId]);
+  }, [currentSessionId, needsApiKey]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -105,7 +115,9 @@ const App: React.FC = () => {
     setInputText('');
     setError(null);
     setIsLoading(false);
-    initializeChat(newSession.messages);
+    if (!needsApiKey) {
+      initializeChat(newSession.messages);
+    }
   };
 
   const deleteSession = (id: string, e: React.MouseEvent) => {
@@ -144,8 +156,25 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleApiKeySave = (key: string) => {
+    setApiKey(key);
+    setNeedsApiKey(false);
+    // Re-initialize current chat with the new key
+    if (currentSessionId) {
+       const session = sessions.find(s => s.id === currentSessionId);
+       if (session) {
+         initializeChat(session.messages);
+       }
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim() || isLoading || !currentSessionId) return;
+
+    if (needsApiKey) {
+      setError("Configure sua chave API para continuar.");
+      return;
+    }
 
     const userMessageText = inputText.trim();
     setInputText('');
@@ -214,7 +243,7 @@ const App: React.FC = () => {
 
     } catch (err) {
       console.error(err);
-      setError("Ocorreu um erro ao conectar com o mentor. Tente novamente.");
+      setError("Ocorreu um erro ao conectar com o mentor. Verifique sua chave API.");
       setSessions(prev => prev.map(session => {
         if (session.id === currentSessionId) {
           return {
@@ -239,6 +268,8 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-[#FDFBF7] dark:bg-[#1c1917] overflow-hidden font-sans">
       
+      {needsApiKey && <ApiKeyModal onSave={handleApiKeySave} />}
+
       <Sidebar 
         sessions={sessions}
         currentSessionId={currentSessionId}
